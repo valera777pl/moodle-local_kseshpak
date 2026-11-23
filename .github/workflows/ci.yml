@@ -1,6 +1,6 @@
 # The plugin installed into a real Moodle and tested there:
 # Moodle's own checks (lint, code style, docs, plugin validation) plus our PHPUnit and Behat tests.
-# KSE runs Moodle 4.2 on PHP 8.x; 4.5 is there so an upgrade at KSE doesn't break the plugin.
+# KSE ran Moodle 4.2 and moved to 5.x by 2026-11-21: every branch from 4.2 to 5.3 is checked.
 name: Moodle plugin
 
 on:
@@ -14,7 +14,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:14
+        image: postgres:${{ matrix.postgres }}
         env:
           POSTGRES_USER: 'postgres'
           POSTGRES_HOST_AUTH_METHOD: 'trust'
@@ -28,10 +28,26 @@ jobs:
         include:
           - php: '8.0'
             moodle-branch: 'MOODLE_402_STABLE'
+            postgres: '14'
           - php: '8.2'
             moodle-branch: 'MOODLE_402_STABLE'
+            postgres: '14'
           - php: '8.3'
             moodle-branch: 'MOODLE_405_STABLE'
+            postgres: '14'
+          # KSE moved to Moodle 5 (Bootstrap 5 in its theme since 2026-11-21); the exact 5.x is hidden, so all of them
+          - php: '8.3'
+            moodle-branch: 'MOODLE_500_STABLE'
+            postgres: '14'
+          - php: '8.3'
+            moodle-branch: 'MOODLE_501_STABLE'
+            postgres: '15'
+          - php: '8.3'
+            moodle-branch: 'MOODLE_502_STABLE'
+            postgres: '16'
+          - php: '8.3'
+            moodle-branch: 'MOODLE_503_STABLE'
+            postgres: '17'
 
     steps:
       - name: Check out repository code
