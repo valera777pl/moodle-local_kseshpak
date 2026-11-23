@@ -49,25 +49,65 @@ if (!issuer::valid_state($state)) {
 
 // Straight to the Google sign-in, the way admin/tool/mobile/launch.php does it with oauthsso=.
 if ($sso && (!isloggedin() || isguestuser()) && is_enabled_auth('oauth2')) {
+    // The address also goes into the session: with MFA on, Moodle sends the student to its MFA page after this sign-in and
+    // brings them back to $SESSION->wantsurl, or to the dashboard when it is empty (the wantsurl above is not enough).
+    $SESSION->wantsurl = $url->out(false);
     $oauthurl = new moodle_url('/auth/oauth2/login.php', ['id' => $sso, 'sesskey' => sesskey(), 'wantsurl' => $url->out(false)]);
     redirect($oauthurl);
 }
 
 require_login(null, false);
+// Signed in (and through MFA, if any): this page is where the student wanted to be, nothing to come back to later.
+if (!empty($SESSION->wantsurl) && strpos((string) $SESSION->wantsurl, '/local/kseshpak/connect.php') !== false) {
+    unset($SESSION->wantsurl);
+}
 if (isguestuser()) {
     throw new moodle_exception('guestsarenotallowed', 'error');
 }
 
-// The site's setup is checked before the user is asked anything.
-$service = issuer::service();
-$returnurl = issuer::return_url();
-issuer::require_can_connect($service);
+// Everything that can refuse is checked before the user is asked anything or anything is issued. A refusal is a
+// page that says why (the site's setup, or this account), not Moodle's error page.
+try {
+    $service = issuer::service();
+    $returnurl = issuer::return_url();
+    issuer::require_can_connect($service);
+    if ($confirm) {
+        // Only the "Allow" button of this site, pressed by this user, gets here.
+        if (!data_submitted() || !confirm_sesskey()) {
+            throw new moodle_exception('invalidsesskey', 'error');
+        }
+        $token = issuer::issue_token($service);
+    }
+} catch (moodle_exception $e) {
+    echo $OUTPUT->header();
+    echo $OUTPUT->heading(get_string('consenttitle', 'local_kseshpak'));
+    echo $OUTPUT->notification($e->getMessage(), \core\output\notification::NOTIFY_ERROR);
+    // Tell KSE Shpak why (a code, not this text), so the app does not wait for a connection that will not come.
+    try {
+        $backurl = issuer::return_url();
+    } catch (moodle_exception $ignored) {
+        $backurl = '';
+    }
+    if ($backurl !== '') {
+        echo html_writer::start_tag('form', ['method' => 'post', 'action' => $backurl]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'state', 'value' => $state]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'error', 'value' => $e->errorcode]);
+        echo html_writer::tag('button', get_string('returnbutton', 'local_kseshpak'), [
+            'type' => 'submit', 'class' => 'btn btn-primary',
+        ]);
+        echo html_writer::end_tag('form');
+    }
+    echo $OUTPUT->continue_button(new moodle_url('/'));
+    echo $OUTPUT->footer();
+    die;
+}
 
 if (!$confirm) {
     $allow = new moodle_url('/local/kseshpak/connect.php', ['state' => $state, 'confirm' => 1, 'sesskey' => sesskey()]);
+    $off = new moodle_url('/local/kseshpak/disconnect.php');
     $message = html_writer::tag('p', get_string('consentwho', 'local_kseshpak', s(fullname($USER))))
         . html_writer::tag('p', get_string('consentwhat', 'local_kseshpak'))
-        . html_writer::tag('p', get_string('consentrevoke', 'local_kseshpak'));
+        . html_writer::tag('p', get_string('consentrevoke', 'local_kseshpak', html_writer::link($off, $off->out(false))));
 
     echo $OUTPUT->header();
     echo $OUTPUT->confirm($message, $allow, new moodle_url('/'), [
@@ -77,13 +117,6 @@ if (!$confirm) {
     echo $OUTPUT->footer();
     die;
 }
-
-// Only the "Allow" button of this site, pressed by this user, gets here.
-if (!data_submitted() || !confirm_sesskey()) {
-    throw new moodle_exception('invalidsesskey', 'error');
-}
-
-$token = issuer::issue_token($service);
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('returning', 'local_kseshpak'));

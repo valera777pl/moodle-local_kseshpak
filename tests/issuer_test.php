@@ -29,8 +29,7 @@ final class issuer_test extends \advanced_testcase {
     /** @var string The read-only functions KSE Shpak calls, as IT adds them to the service. */
     const FUNCTIONS = 'core_webservice_get_site_info,core_enrol_get_users_courses,gradereport_overview_get_course_grades,'
         . 'gradereport_user_get_grade_items,core_calendar_get_calendar_events,mod_assign_get_assignments,'
-        . 'mod_assign_get_submission_status,mod_quiz_get_quizzes_by_courses,core_course_get_contents,'
-        . 'core_group_get_course_user_groups';
+        . 'mod_assign_get_submission_status,mod_quiz_get_quizzes_by_courses,core_course_get_contents';
 
     /** @var string Quiz attempts since Moodle 5 (KSE moved to Moodle 5 in November 2026). */
     const QUIZ_ATTEMPTS = 'mod_quiz_get_user_quiz_attempts';
@@ -175,6 +174,20 @@ final class issuer_test extends \advanced_testcase {
         $this->assertStringContainsString('core_message_send_instant_messages, mod_assign_save_submission', $e->getMessage());
     }
 
+    public function test_service_with_a_function_kse_shpak_does_not_call_is_refused(): void {
+        $this->resetAfterTest();
+        // The function core_course_get_courses only reads, but KSE Shpak does not call it.
+        $this->make_service(self::functions() . ',core_course_get_courses,core_message_get_conversations');
+        $e = $this->assert_error(fn() => issuer::service(), 'serviceextrafunctions');
+        $this->assertStringContainsString('core_course_get_courses, core_message_get_conversations', $e->getMessage());
+    }
+
+    public function test_the_optional_groups_function_is_accepted(): void {
+        $this->resetAfterTest();
+        $this->make_service(self::functions() . ',core_group_get_course_user_groups');
+        $this->assertSame(issuer::SERVICE, issuer::service()->shortname);
+    }
+
     public function test_service_without_functions_is_refused(): void {
         $this->resetAfterTest();
         $this->make_service(null);
@@ -242,22 +255,117 @@ final class issuer_test extends \advanced_testcase {
         $this->assert_error(fn() => issuer::issue_token(issuer::service()), 'usernotallowed');
     }
 
-    public function test_key_works_for_the_service_and_its_functions_only(): void {
+    public function test_every_function_the_readme_asks_for_exists_here_and_only_reads(): void {
+        foreach (explode(',', self::functions()) as $name) {
+            $info = \core_external\external_api::external_function_info($name, IGNORE_MISSING);
+            $this->assertNotEmpty($info, "$name is missing on this Moodle");
+            $this->assertSame('read', $info->type, $name);
+        }
+    }
+
+    public function test_a_service_that_moves_files_is_refused(): void {
+        $this->resetAfterTest();
+        $this->make_service('', ['uploadfiles' => 1]);
+        $this->assert_error(fn() => issuer::service(), 'servicefiles');
+    }
+
+    public function test_a_service_that_hands_out_files_is_refused(): void {
+        $this->resetAfterTest();
+        $this->make_service('', ['downloadfiles' => 1]);
+        $this->assert_error(fn() => issuer::service(), 'servicefiles');
+    }
+
+    public function test_a_student_of_a_course_gets_a_key(): void {
+        $this->resetAfterTest();
+        $service = $this->make_service();
+        $user = $this->student();
+        $course = $this->getDataGenerator()->create_course();
+        $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', issuer::issue_token($service));
+    }
+
+    /**
+     * A user with this role in one course (and a student in another) asks for a key: refused, none made.
+     *
+     * @param string $role shortname of a course role whose key would read other people's grades
+     */
+    private function assert_course_staff_gets_no_key(string $role): void {
+        global $DB;
+        $service = $this->make_service();
+        $user = $this->student();
+        $this->getDataGenerator()->enrol_user($user->id, $this->getDataGenerator()->create_course()->id, 'student');
+        $this->getDataGenerator()->enrol_user($user->id, $this->getDataGenerator()->create_course()->id, $role);
+        $this->assert_error(fn() => issuer::issue_token($service), 'nostaff');
+        $this->assertEquals(0, $DB->count_records('external_tokens', ['userid' => $user->id]));
+    }
+
+    public function test_a_teacher_gets_no_key(): void {
+        $this->resetAfterTest();
+        $this->assert_course_staff_gets_no_key('editingteacher');
+    }
+
+    public function test_an_assistant_without_editing_gets_no_key(): void {
+        $this->resetAfterTest();
+        $this->assert_course_staff_gets_no_key('teacher');
+    }
+
+    public function test_a_manager_gets_no_key(): void {
         global $DB;
         $this->resetAfterTest();
         $service = $this->make_service();
-        $this->student();
-        $key = issuer::issue_token($service);
-        $token = $DB->get_record('external_tokens', ['token' => $key], '*', MUST_EXIST);
-        $functions = $DB->get_fieldset_select(
-            'external_services_functions',
-            'functionname',
-            'externalserviceid = ?',
-            [$token->externalserviceid]
-        );
-        sort($functions);
-        $expected = explode(',', self::functions());
-        sort($expected);
-        $this->assertSame($expected, $functions);
+        $user = $this->student();
+        $managerid = $DB->get_field('role', 'id', ['shortname' => 'manager'], MUST_EXIST);
+        role_assign($managerid, $user->id, \context_system::instance()->id);
+        $this->assert_error(fn() => issuer::issue_token($service), 'nostaff');
+    }
+
+    public function test_logged_in_as_someone_else_gets_no_key(): void {
+        $this->resetAfterTest();
+        $service = $this->make_service();
+        $this->set_user_capability('webservice/rest:use', CAP_ALLOW);
+        $user = $this->getDataGenerator()->create_user();
+        $this->setAdminUser();
+        \core\session\manager::loginas($user->id, \context_system::instance());
+        $this->assert_error(fn() => issuer::issue_token($service), 'nologinas');
+    }
+
+    public function test_a_suspended_user_gets_no_key(): void {
+        $this->resetAfterTest();
+        $service = $this->make_service();
+        $this->set_user_capability('webservice/rest:use', CAP_ALLOW);
+        $this->setUser($this->getDataGenerator()->create_user(['suspended' => 1]));
+        $this->assert_error(fn() => issuer::issue_token($service), 'suspended');
+    }
+
+    public function test_a_key_close_to_its_end_is_replaced_by_a_full_one(): void {
+        global $CFG, $DB;
+        $this->resetAfterTest();
+        $service = $this->make_service();
+        $user = $this->student();
+        $old = issuer::issue_token($service);
+        $DB->set_field('external_tokens', 'validuntil', time() + DAYSECS, ['token' => $old]);
+
+        $new = issuer::issue_token($service);
+        $this->assertNotSame($old, $new);
+        // The old one is gone: KSE Shpak keeps only the newest, and nobody else holds it.
+        $this->assertEquals([$new], array_values($DB->get_fieldset_select('external_tokens', 'token', 'userid = ?', [$user->id])));
+        $validuntil = $DB->get_field('external_tokens', 'validuntil', ['token' => $new]);
+        $this->assertEqualsWithDelta(time() + $CFG->tokenduration, $validuntil, 5);
+    }
+
+    public function test_delete_tokens_takes_only_this_users_keys_for_this_service(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $service = $this->make_service();
+        $other = $this->getDataGenerator()->create_user();
+        $this->set_user_capability('webservice/rest:use', CAP_ALLOW);
+        $this->setUser($other);
+        issuer::issue_token($service);
+        $user = $this->student();
+        issuer::issue_token($service);
+
+        $this->assertSame(1, issuer::delete_tokens((int) $user->id, (int) $service->id));
+        $this->assertEquals(0, $DB->count_records('external_tokens', ['userid' => $user->id]));
+        $this->assertEquals(1, $DB->count_records('external_tokens', ['userid' => $other->id]));
     }
 }

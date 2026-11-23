@@ -11,6 +11,14 @@ Feature: Connect Moodle to KSE Shpak with a read-only key
     And the following "users" exist:
       | username | firstname | lastname | email                |
       | student1 | Olena     | Koval    | student1@example.com |
+      | teacher1 | Taras     | Bondar   | teacher1@example.com |
+    And the following "courses" exist:
+      | fullname          | shortname |
+      | Principles of Eco | ECON100   |
+    And the following "course enrolments" exist:
+      | user     | course  | role           |
+      | student1 | ECON100 | student        |
+      | teacher1 | ECON100 | editingteacher |
     And the following "permission overrides" exist:
       | capability          | permission | role | contextlevel | reference |
       | webservice/rest:use | Allow      | user | System       |           |
@@ -48,3 +56,30 @@ Feature: Connect Moodle to KSE Shpak with a read-only key
     And I press "Allow"
     Then the KSE Shpak return form carries the key of "student1" and the state "43.1900000000.Another_state"
     And "student1" has 1 KSE Shpak key
+
+  Scenario: A teacher gets no key: it would read the students' grades
+    Given I log in as "teacher1"
+    When I visit "/local/kseshpak/connect.php?state=42.1900000000.Signature_-x"
+    Then I should see "can see other people's grades"
+    And I should see "Return to KSE Shpak"
+    And I should not see "Allow"
+    And "teacher1" has 0 KSE Shpak keys
+
+  Scenario: The allow link opened directly, without the button, gives no key
+    Given I log in as "student1"
+    When I visit "/local/kseshpak/connect.php?state=42.1900000000.Signature_-x&confirm=1"
+    Then I should not see "Returning to KSE Shpak"
+    And "student1" has 0 KSE Shpak keys
+
+  Scenario: A student turns KSE Shpak's access off in Moodle itself
+    Given I log in as "student1"
+    And I visit "/local/kseshpak/connect.php?state=42.1900000000.Signature_-x"
+    And I should see "/local/kseshpak/disconnect.php"
+    And I press "Allow"
+    And "student1" has 1 KSE Shpak key
+    When I visit "/local/kseshpak/disconnect.php"
+    And I press "Turn off"
+    Then I should see "KSE Shpak can no longer read your Moodle"
+    And "student1" has 0 KSE Shpak keys
+    And I visit "/local/kseshpak/disconnect.php"
+    And I should see "there is nothing to turn off"

@@ -35,6 +35,20 @@ class issuer {
     const SERVICE = 'kse_shpak_readonly';
 
     /**
+     * @var string[] The functions KSE Shpak calls, and nothing else (README step 2). A service with any other function,
+     * even one that only reads (private messages, other users' profiles), gets no key from this plugin.
+     */
+    const FUNCTIONS = [
+        'core_webservice_get_site_info', 'core_enrol_get_users_courses', 'gradereport_overview_get_course_grades',
+        'gradereport_user_get_grade_items', 'core_calendar_get_calendar_events', 'mod_assign_get_assignments',
+        'mod_assign_get_submission_status', 'mod_quiz_get_quizzes_by_courses', 'core_course_get_contents',
+        'mod_quiz_get_user_quiz_attempts', 'mod_quiz_get_user_attempts', 'core_group_get_course_user_groups',
+    ];
+
+    /** @var int A key with less than this left is replaced by a new one (30 days), so a reconnect gives a full term. */
+    const RENEW_BEFORE = 30 * DAYSECS;
+
+    /**
      * The opaque value KSE Shpak puts in the link: letters, digits, dot, dash and underscore only.
      *
      * @param string $state
@@ -79,11 +93,16 @@ class issuer {
             throw new moodle_exception('servicemissing', 'local_kseshpak', '', self::SERVICE);
         }
         self::require_read_only($service);
+        // Files go through their own scripts, not through the functions above: uploading is writing, and neither is needed.
+        if (!empty($service->uploadfiles) || !empty($service->downloadfiles)) {
+            throw new moodle_exception('servicefiles', 'local_kseshpak', '', self::SERVICE);
+        }
         return $service;
     }
 
     /**
-     * Refuses a service that has no functions, or any function not declared 'read' in its db/services.php.
+     * Refuses a service that has no functions, any function not declared 'read' in its db/services.php, and any
+     * function that is not on the list of what KSE Shpak calls (self::FUNCTIONS).
      *
      * @param stdClass $service record from {external_services}
      * @throws moodle_exception
@@ -116,6 +135,11 @@ class issuer {
             sort($notread);
             throw new moodle_exception('servicenotreadonly', 'local_kseshpak', '', implode(', ', $notread));
         }
+        $extra = array_diff($names, self::FUNCTIONS);
+        if ($extra) {
+            sort($extra);
+            throw new moodle_exception('serviceextrafunctions', 'local_kseshpak', '', implode(', ', $extra));
+        }
     }
 
     /**
@@ -133,6 +157,14 @@ class issuer {
         // As in core: a site administrator's key would read everyone's data.
         if (is_siteadmin()) {
             throw new moodle_exception('noadmins', 'local_kseshpak');
+        }
+        // Someone "logged in as" this user is not this user.
+        if (\core\session\manager::is_loggedinas()) {
+            throw new moodle_exception('nologinas', 'local_kseshpak');
+        }
+        // The same functions give a teacher, an assistant or a manager their students' grades: the key is for one's own only.
+        if (self::sees_others_grades((int) $USER->id)) {
+            throw new moodle_exception('nostaff', 'local_kseshpak');
         }
         if (!has_capability('webservice/rest:use', $context)) {
             throw new moodle_exception('norestuse', 'local_kseshpak');
@@ -155,11 +187,26 @@ class issuer {
     }
 
     /**
+     * Whether the user may see other people's grades anywhere: in the whole site, or in at least one course.
+     *
+     * @param int $userid
+     * @return bool
+     */
+    public static function sees_others_grades(int $userid): bool {
+        if (has_capability('moodle/grade:viewall', context_system::instance(), $userid, false)) {
+            return true;
+        }
+        return (bool) get_user_capability_course('moodle/grade:viewall', $userid, false, '', '', 1);
+    }
+
+    /**
      * The current user's key for the service: a valid one they already have, or a new one.
      *
      * Students don't need moodle/webservice:createtoken (that would let them make keys for any open service);
      * this plugin's own capability local/kseshpak:connect lets them get a key for kse_shpak_readonly only.
      * The checks and the expiry are those of \core_external\util::generate_token_for_current_user().
+     * A key close to its expiry is not handed out again: a new one replaces every key of the user for this service,
+     * since KSE Shpak keeps only the newest.
      *
      * @param stdClass $service record from {external_services}, as returned by service()
      * @return string the key
@@ -173,6 +220,7 @@ class issuer {
 
         $token = self::existing_token($service);
         if (!$token) {
+            self::delete_tokens((int) $USER->id, (int) $service->id);
             $validuntil = empty($CFG->tokenduration) ? 0 : time() + (int) $CFG->tokenduration;
             $key = \core_external\util::generate_token(EXTERNAL_TOKEN_PERMANENT, $service, $USER->id, $context, $validuntil);
             $token = $DB->get_record('external_tokens', ['token' => $key], '*', MUST_EXIST);
@@ -192,13 +240,32 @@ class issuer {
     }
 
     /**
-     * The user's newest permanent key for the service that is still valid, if any.
+     * Deletes every key of the user for the service.
+     *
+     * @param int $userid
+     * @param int $serviceid
+     * @return int how many there were
+     */
+    public static function delete_tokens(int $userid, int $serviceid): int {
+        global $DB;
+
+        $conditions = ['userid' => $userid, 'externalserviceid' => $serviceid];
+        $count = $DB->count_records('external_tokens', $conditions);
+        $DB->delete_records('external_tokens', $conditions);
+        return $count;
+    }
+
+    /**
+     * The user's newest permanent key for the service that is still valid for a while, if any.
      *
      * @param stdClass $service record from {external_services}
      * @return stdClass|null record from {external_tokens}
      */
     private static function existing_token(stdClass $service): ?stdClass {
-        global $DB, $USER;
+        global $CFG, $DB, $USER;
+
+        // Renew a month before the end, or halfway through when the site's keys live less than two months.
+        $renewbefore = min(self::RENEW_BEFORE, (int) (($CFG->tokenduration ?? 0) / 2));
 
         $tokens = $DB->get_records('external_tokens', [
             'userid' => $USER->id,
@@ -206,7 +273,7 @@ class issuer {
             'tokentype' => EXTERNAL_TOKEN_PERMANENT,
         ], 'timecreated DESC, id DESC');
         foreach ($tokens as $token) {
-            if (!empty($token->sid) || (!empty($token->validuntil) && $token->validuntil < time())) {
+            if (!empty($token->sid) || (!empty($token->validuntil) && $token->validuntil < time() + $renewbefore)) {
                 continue;
             }
             if (!empty($token->iprestriction) && !address_in_subnet(getremoteaddr(), $token->iprestriction)) {
