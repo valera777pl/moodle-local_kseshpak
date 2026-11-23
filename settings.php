@@ -15,23 +15,23 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Admin settings for local_ksehub: one field, the address the key is sent to.
+ * Admin settings for local_kseshpak: one field, the address the key is sent to.
  *
- * @package    local_ksehub
- * @copyright  2026 KSE Hub
+ * @package    local_kseshpak
+ * @copyright  2026 KSE Shpak
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
 if ($hassiteconfig) {
-    $settings = new admin_settingpage('local_ksehub', get_string('pluginname', 'local_ksehub'));
+    $settings = new admin_settingpage('local_kseshpak', get_string('pluginname', 'local_kseshpak'));
     $ADMIN->add('localplugins', $settings);
 
     $settings->add(new admin_setting_configtext(
-        'local_ksehub/returnurl',
-        get_string('returnurl', 'local_ksehub'),
-        get_string('returnurl_desc', 'local_ksehub'),
+        'local_kseshpak/returnurl',
+        get_string('returnurl', 'local_kseshpak'),
+        get_string('returnurl_desc', 'local_kseshpak'),
         'https://kse-hub.vercel.app/api/moodle-plugin/return',
         PARAM_URL,
         60

@@ -1,4 +1,4 @@
-# A tag v* (e.g. v1.0.0) makes a GitHub release with local_ksehub.zip, ready for
+# A tag v* (e.g. v1.0.0) makes a GitHub release with local_kseshpak.zip, ready for
 # Site administration → Plugins → Install plugins, and its SHA-256 checksum.
 name: Release
 
@@ -13,21 +13,21 @@ jobs:
   zip:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out the plugin into a folder named ksehub
+      - name: Check out the plugin into a folder named kseshpak
         uses: actions/checkout@v4
         with:
-          path: ksehub
+          path: kseshpak
 
-      - name: Zip it the way Moodle installs it (root folder ksehub)
+      - name: Zip it the way Moodle installs it (root folder kseshpak)
         run: |
-          zip -r local_ksehub.zip ksehub -x 'ksehub/.git/*' 'ksehub/.github/*'
-          sha256sum local_ksehub.zip > local_ksehub.zip.sha256
-          cat local_ksehub.zip.sha256
+          zip -r local_kseshpak.zip kseshpak -x 'kseshpak/.git/*' 'kseshpak/.github/*'
+          sha256sum local_kseshpak.zip > local_kseshpak.zip.sha256
+          cat local_kseshpak.zip.sha256
 
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" local_ksehub.zip local_ksehub.zip.sha256 \
-            --repo "$GITHUB_REPOSITORY" --title "local_ksehub $GITHUB_REF_NAME" \
-            --notes "Moodle plugin built by GitHub Actions from tag $GITHUB_REF_NAME. SHA-256: $(cut -d' ' -f1 local_ksehub.zip.sha256)"
+          gh release create "$GITHUB_REF_NAME" local_kseshpak.zip local_kseshpak.zip.sha256 \
+            --repo "$GITHUB_REPOSITORY" --title "local_kseshpak $GITHUB_REF_NAME" \
+            --notes "Moodle plugin built by GitHub Actions from tag $GITHUB_REF_NAME. SHA-256: $(cut -d' ' -f1 local_kseshpak.zip.sha256)"

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace local_ksehub;
+namespace local_kseshpak;
 
 use context_system;
 use moodle_exception;
@@ -26,16 +26,16 @@ use stdClass;
  * Every check that can fail because of the site's setup fails here with its own message, so the person
  * setting the plugin up sees what to change instead of a generic error.
  *
- * @package    local_ksehub
- * @copyright  2026 KSE Hub
+ * @package    local_kseshpak
+ * @copyright  2026 KSE Shpak
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class issuer {
     /** @var string Short name of the only external service this plugin issues keys for. */
-    const SERVICE = 'kse_hub_readonly';
+    const SERVICE = 'kse_shpak_readonly';
 
     /**
-     * The opaque value KSE Hub puts in the link: letters, digits, dot, dash and underscore only.
+     * The opaque value KSE Shpak puts in the link: letters, digits, dot, dash and underscore only.
      *
      * @param string $state
      * @return bool
@@ -51,9 +51,9 @@ class issuer {
      * @throws moodle_exception when it is empty or not https (this is also how the plugin is turned off)
      */
     public static function return_url(): string {
-        $url = trim((string) get_config('local_ksehub', 'returnurl'));
+        $url = trim((string) get_config('local_kseshpak', 'returnurl'));
         if (!preg_match('~^https://[A-Za-z0-9.-]+(:\d+)?(/[^\s"\'<>]*)?$~', $url)) {
-            throw new moodle_exception('notconfigured', 'local_ksehub');
+            throw new moodle_exception('notconfigured', 'local_kseshpak');
         }
         return $url;
     }
@@ -72,11 +72,11 @@ class issuer {
         }
         $protocols = empty($CFG->webserviceprotocols) ? [] : explode(',', $CFG->webserviceprotocols);
         if (!in_array('rest', $protocols)) {
-            throw new moodle_exception('restdisabled', 'local_ksehub');
+            throw new moodle_exception('restdisabled', 'local_kseshpak');
         }
         $service = $DB->get_record('external_services', ['shortname' => self::SERVICE, 'enabled' => 1]);
         if (!$service) {
-            throw new moodle_exception('servicemissing', 'local_ksehub', '', self::SERVICE);
+            throw new moodle_exception('servicemissing', 'local_kseshpak', '', self::SERVICE);
         }
         self::require_read_only($service);
         return $service;
@@ -98,7 +98,7 @@ class issuer {
             [$service->id]
         );
         if (!$names) {
-            throw new moodle_exception('serviceempty', 'local_ksehub', '', self::SERVICE);
+            throw new moodle_exception('serviceempty', 'local_kseshpak', '', self::SERVICE);
         }
         $notread = [];
         foreach ($names as $name) {
@@ -114,7 +114,7 @@ class issuer {
         }
         if ($notread) {
             sort($notread);
-            throw new moodle_exception('servicenotreadonly', 'local_ksehub', '', implode(', ', $notread));
+            throw new moodle_exception('servicenotreadonly', 'local_kseshpak', '', implode(', ', $notread));
         }
     }
 
@@ -129,13 +129,13 @@ class issuer {
 
         $context = context_system::instance();
         \core_user::require_active_user($USER, true, true);
-        require_capability('local/ksehub:connect', $context);
+        require_capability('local/kseshpak:connect', $context);
         // As in core: a site administrator's key would read everyone's data.
         if (is_siteadmin()) {
-            throw new moodle_exception('noadmins', 'local_ksehub');
+            throw new moodle_exception('noadmins', 'local_kseshpak');
         }
         if (!has_capability('webservice/rest:use', $context)) {
-            throw new moodle_exception('norestuse', 'local_ksehub');
+            throw new moodle_exception('norestuse', 'local_kseshpak');
         }
         if ($service->requiredcapability && !has_capability($service->requiredcapability, $context)) {
             throw new moodle_exception('missingrequiredcapability', 'webservice', '', $service->requiredcapability);
@@ -158,7 +158,7 @@ class issuer {
      * The current user's key for the service: a valid one they already have, or a new one.
      *
      * Students don't need moodle/webservice:createtoken (that would let them make keys for any open service);
-     * this plugin's own capability local/ksehub:connect lets them get a key for kse_hub_readonly only.
+     * this plugin's own capability local/kseshpak:connect lets them get a key for kse_shpak_readonly only.
      * The checks and the expiry are those of \core_external\util::generate_token_for_current_user().
      *
      * @param stdClass $service record from {external_services}, as returned by service()

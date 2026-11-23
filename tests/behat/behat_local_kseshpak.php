@@ -15,11 +15,11 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Behat steps for local_ksehub.
+ * Behat steps for local_kseshpak.
  *
- * @package    local_ksehub
+ * @package    local_kseshpak
  * @category   test
- * @copyright  2026 KSE Hub
+ * @copyright  2026 KSE Shpak
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -30,48 +30,48 @@ require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
 use Behat\Mink\Exception\ExpectationException;
 
 /**
- * Behat steps for local_ksehub.
+ * Behat steps for local_kseshpak.
  *
- * @package    local_ksehub
+ * @package    local_kseshpak
  * @category   test
- * @copyright  2026 KSE Hub
+ * @copyright  2026 KSE Shpak
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class behat_local_ksehub extends behat_base {
+class behat_local_kseshpak extends behat_base {
     /**
-     * The page posts back to the configured address with this user's key for kse_hub_readonly and this state.
+     * The page posts back to the configured address with this user's key for kse_shpak_readonly and this state.
      *
-     * @Then the KSE Hub return form carries the key of :username and the state :state
+     * @Then the KSE Shpak return form carries the key of :username and the state :state
      * @param string $username
      * @param string $state
      */
     public function the_return_form_carries(string $username, string $state): void {
         global $DB;
 
-        $form = $this->find('css', 'form#local_ksehub_return');
+        $form = $this->find('css', 'form#local_kseshpak_return');
         $action = $form->getAttribute('action');
-        if ($action !== get_config('local_ksehub', 'returnurl')) {
+        if ($action !== get_config('local_kseshpak', 'returnurl')) {
             throw new ExpectationException("The form posts to '$action'", $this->getSession());
         }
         if (strtolower((string) $form->getAttribute('method')) !== 'post') {
             throw new ExpectationException('The form is not sent by POST', $this->getSession());
         }
-        $key = $this->find('css', 'form#local_ksehub_return input[name="token"]')->getValue();
-        $sentstate = $this->find('css', 'form#local_ksehub_return input[name="state"]')->getValue();
+        $key = $this->find('css', 'form#local_kseshpak_return input[name="token"]')->getValue();
+        $sentstate = $this->find('css', 'form#local_kseshpak_return input[name="state"]')->getValue();
         if ($sentstate !== $state) {
             throw new ExpectationException("The form carries the state '$sentstate'", $this->getSession());
         }
         $userid = $DB->get_field('user', 'id', ['username' => $username], MUST_EXIST);
-        $serviceid = $DB->get_field('external_services', 'id', ['shortname' => 'kse_hub_readonly'], MUST_EXIST);
+        $serviceid = $DB->get_field('external_services', 'id', ['shortname' => 'kse_shpak_readonly'], MUST_EXIST);
         if (!$DB->record_exists('external_tokens', ['token' => $key, 'userid' => $userid, 'externalserviceid' => $serviceid])) {
-            throw new ExpectationException("The form doesn't carry $username's key for kse_hub_readonly", $this->getSession());
+            throw new ExpectationException("The form doesn't carry $username's key for kse_shpak_readonly", $this->getSession());
         }
     }
 
     /**
      * How many keys the user has, of any service.
      *
-     * @Then :username has :count KSE Hub key(s)
+     * @Then :username has :count KSE Shpak key(s)
      * @param string $username
      * @param int $count
      */

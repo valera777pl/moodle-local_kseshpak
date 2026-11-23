@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace local_ksehub\privacy;
+namespace local_kseshpak\privacy;
 
 use core_privacy\local\metadata\collection;
 use core_privacy\local\request\approved_contextlist;
@@ -23,12 +23,12 @@ use core_privacy\local\request\contextlist;
 use core_privacy\local\request\userlist;
 
 /**
- * Privacy provider: the plugin stores nothing itself; it sends the user's key to KSE Hub.
+ * Privacy provider: the plugin stores nothing itself; it sends the user's key to KSE Shpak.
  *
  * The key itself is kept in {external_tokens} by Moodle core and is covered by core's own privacy provider.
  *
- * @package    local_ksehub
- * @copyright  2026 KSE Hub
+ * @package    local_kseshpak
+ * @copyright  2026 KSE Shpak
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class provider implements
@@ -42,10 +42,10 @@ class provider implements
      * @return collection
      */
     public static function get_metadata(collection $collection): collection {
-        $collection->add_external_location_link('ksehub', [
-            'token' => 'privacy:metadata:ksehub:token',
-            'state' => 'privacy:metadata:ksehub:state',
-        ], 'privacy:metadata:ksehub');
+        $collection->add_external_location_link('kseshpak', [
+            'token' => 'privacy:metadata:kseshpak:token',
+            'state' => 'privacy:metadata:kseshpak:state',
+        ], 'privacy:metadata:kseshpak');
         return $collection;
     }
 

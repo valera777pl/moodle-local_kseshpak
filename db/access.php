@@ -15,20 +15,20 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Capabilities for local_ksehub.
+ * Capabilities for local_kseshpak.
  *
- * local/ksehub:connect — get a key for the read-only service kse_hub_readonly through this plugin, and nothing more.
+ * local/kseshpak:connect — get a key for the read-only service kse_shpak_readonly through this plugin, and nothing more.
  * Every signed-in user has it by default; remove it from "Authenticated user" to allow only some roles.
  *
- * @package    local_ksehub
- * @copyright  2026 KSE Hub
+ * @package    local_kseshpak
+ * @copyright  2026 KSE Shpak
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
 $capabilities = [
-    'local/ksehub:connect' => [
+    'local/kseshpak:connect' => [
         'riskbitmask' => RISK_PERSONAL,
         'captype' => 'write',
         'contextlevel' => CONTEXT_SYSTEM,

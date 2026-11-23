@@ -14,29 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace local_ksehub\privacy;
+namespace local_kseshpak\privacy;
 
 use core_privacy\local\metadata\collection;
 
 /**
  * Privacy provider tests.
  *
- * @package    local_ksehub
+ * @package    local_kseshpak
  * @category   test
- * @copyright  2026 KSE Hub
+ * @copyright  2026 KSE Shpak
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \local_ksehub\privacy\provider
+ * @covers     \local_kseshpak\privacy\provider
  */
 final class provider_test extends \advanced_testcase {
     public function test_metadata_names_what_leaves_moodle(): void {
-        $collection = provider::get_metadata(new collection('local_ksehub'));
+        $collection = provider::get_metadata(new collection('local_kseshpak'));
         $items = $collection->get_collection();
         $this->assertCount(1, $items);
-        $this->assertSame('ksehub', $items[0]->get_name());
+        $this->assertSame('kseshpak', $items[0]->get_name());
         $this->assertEqualsCanonicalizing(['state', 'token'], array_keys($items[0]->get_privacy_fields()));
         // Every string the privacy page shows exists.
         foreach (array_merge([$items[0]->get_summary()], array_values($items[0]->get_privacy_fields())) as $identifier) {
-            $this->assertTrue(get_string_manager()->string_exists($identifier, 'local_ksehub'), $identifier);
+            $this->assertTrue(get_string_manager()->string_exists($identifier, 'local_kseshpak'), $identifier);
         }
     }
 

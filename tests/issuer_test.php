@@ -14,19 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace local_ksehub;
+namespace local_kseshpak;
 
 /**
  * Tests for the read-only key issuer.
  *
- * @package    local_ksehub
+ * @package    local_kseshpak
  * @category   test
- * @copyright  2026 KSE Hub
+ * @copyright  2026 KSE Shpak
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \local_ksehub\issuer
+ * @covers     \local_kseshpak\issuer
  */
 final class issuer_test extends \advanced_testcase {
-    /** @var string The read-only functions KSE Hub calls, as IT adds them to the service. */
+    /** @var string The read-only functions KSE Shpak calls, as IT adds them to the service. */
     const FUNCTIONS = 'core_webservice_get_site_info,core_enrol_get_users_courses,gradereport_overview_get_course_grades,'
         . 'gradereport_user_get_grade_items,core_calendar_get_calendar_events,mod_assign_get_assignments,'
         . 'mod_assign_get_submission_status,mod_quiz_get_quizzes_by_courses,mod_quiz_get_user_attempts,core_course_get_contents,'
@@ -43,7 +43,7 @@ final class issuer_test extends \advanced_testcase {
         set_config('enablewebservices', 1);
         set_config('webserviceprotocols', 'rest');
         $generator = $this->getDataGenerator()->get_plugin_generator('core_webservice');
-        $defaults = ['name' => 'KSE Hub (read-only)', 'shortname' => issuer::SERVICE, 'enabled' => 1];
+        $defaults = ['name' => 'KSE Shpak (read-only)', 'shortname' => issuer::SERVICE, 'enabled' => 1];
         $service = $generator->create_service(array_merge($defaults, $fields));
         if ($functions !== null) {
             $generator->create_service_functions(['service' => issuer::SERVICE, 'functions' => $functions]);
@@ -107,7 +107,7 @@ final class issuer_test extends \advanced_testcase {
         // The default from settings.php.
         $this->assertSame('https://kse-hub.vercel.app/api/moodle-plugin/return', issuer::return_url());
 
-        set_config('returnurl', 'https://example.org/back?x=1', 'local_ksehub');
+        set_config('returnurl', 'https://example.org/back?x=1', 'local_kseshpak');
         $this->assertSame('https://example.org/back?x=1', issuer::return_url());
 
         $bads = [
@@ -119,7 +119,7 @@ final class issuer_test extends \advanced_testcase {
             'https://a.example/"><script>',
         ];
         foreach ($bads as $bad) {
-            set_config('returnurl', $bad, 'local_ksehub');
+            set_config('returnurl', $bad, 'local_kseshpak');
             $this->assert_error(fn() => issuer::return_url(), 'notconfigured');
         }
     }
@@ -197,7 +197,7 @@ final class issuer_test extends \advanced_testcase {
         $this->resetAfterTest();
         $service = $this->make_service();
         $this->student();
-        $this->set_user_capability('local/ksehub:connect', CAP_PROHIBIT);
+        $this->set_user_capability('local/kseshpak:connect', CAP_PROHIBIT);
         $this->expectException(\required_capability_exception::class);
         issuer::issue_token($service);
     }

@@ -15,17 +15,17 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Version information for local_ksehub.
+ * Version information for local_kseshpak.
  *
- * @package    local_ksehub
- * @copyright  2026 KSE Hub
+ * @package    local_kseshpak
+ * @copyright  2026 KSE Shpak
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_ksehub';
-$plugin->version = 2026111601;
+$plugin->component = 'local_kseshpak';
+$plugin->version = 2026112300;
 $plugin->requires = 2023042400; // Moodle 4.2.
 $plugin->maturity = MATURITY_STABLE;
-$plugin->release = '1.0.1';
+$plugin->release = '2.0.0';
