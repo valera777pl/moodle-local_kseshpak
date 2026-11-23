@@ -48,10 +48,12 @@ core_calendar_get_calendar_events
 mod_assign_get_assignments
 mod_assign_get_submission_status
 mod_quiz_get_quizzes_by_courses
-mod_quiz_get_user_attempts
+mod_quiz_get_user_quiz_attempts
 core_course_get_contents
 core_group_get_course_user_groups
 ```
+
+На Moodle 4.x замість `mod_quiz_get_user_quiz_attempts` (з'явилася в Moodle 5) додайте `mod_quiz_get_user_attempts`.
 
 Навіщо кожна: профіль студента; його курси; оцінки (підсумки й по завданнях); дедлайни з календаря; завдання і чи здано; тести і спроби; матеріали курсу (лише посилання на сторінки Moodle, файли через ключ не завантажуються); групи самого студента, щоб показувати лише квізи його групи. Усі функції Moodle перевіряє правами самого студента: чужих оцінок чи груп ключ не відкриє.
 

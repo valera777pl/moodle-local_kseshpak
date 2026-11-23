@@ -29,17 +29,35 @@ final class issuer_test extends \advanced_testcase {
     /** @var string The read-only functions KSE Shpak calls, as IT adds them to the service. */
     const FUNCTIONS = 'core_webservice_get_site_info,core_enrol_get_users_courses,gradereport_overview_get_course_grades,'
         . 'gradereport_user_get_grade_items,core_calendar_get_calendar_events,mod_assign_get_assignments,'
-        . 'mod_assign_get_submission_status,mod_quiz_get_quizzes_by_courses,mod_quiz_get_user_attempts,core_course_get_contents,'
+        . 'mod_assign_get_submission_status,mod_quiz_get_quizzes_by_courses,core_course_get_contents,'
         . 'core_group_get_course_user_groups';
+
+    /** @var string Quiz attempts since Moodle 5 (KSE moved to Moodle 5 in November 2026). */
+    const QUIZ_ATTEMPTS = 'mod_quiz_get_user_quiz_attempts';
+
+    /** @var string Quiz attempts on Moodle 4.x, deprecated in Moodle 5. */
+    const QUIZ_ATTEMPTS_OLD = 'mod_quiz_get_user_attempts';
+
+    /**
+     * The service's functions on this Moodle: the quiz attempts function it has.
+     *
+     * @return string comma-separated
+     */
+    private static function functions(): string {
+        global $DB;
+        $new = $DB->record_exists('external_functions', ['name' => self::QUIZ_ATTEMPTS]);
+        return self::FUNCTIONS . ',' . ($new ? self::QUIZ_ATTEMPTS : self::QUIZ_ATTEMPTS_OLD);
+    }
 
     /**
      * Web services on, REST on, and the service with the given functions.
      *
-     * @param string|null $functions comma-separated, null for none
+     * @param string|null $functions comma-separated, '' for this Moodle's functions, null for none
      * @param array $fields more fields of the service
      * @return \stdClass the service record
      */
-    private function make_service(?string $functions = self::FUNCTIONS, array $fields = []): \stdClass {
+    private function make_service(?string $functions = '', array $fields = []): \stdClass {
+        $functions = $functions === '' ? self::functions() : $functions;
         set_config('enablewebservices', 1);
         set_config('webserviceprotocols', 'rest');
         $generator = $this->getDataGenerator()->get_plugin_generator('core_webservice');
@@ -140,7 +158,7 @@ final class issuer_test extends \advanced_testcase {
         set_config('webserviceprotocols', 'rest');
         $this->assert_error(fn() => issuer::service(), 'servicemissing');
 
-        $this->make_service(self::FUNCTIONS, ['enabled' => 0]);
+        $this->make_service(self::functions(), ['enabled' => 0]);
         $this->assert_error(fn() => issuer::service(), 'servicemissing');
     }
 
@@ -152,7 +170,7 @@ final class issuer_test extends \advanced_testcase {
 
     public function test_service_with_a_write_function_is_refused(): void {
         $this->resetAfterTest();
-        $this->make_service(self::FUNCTIONS . ',mod_assign_save_submission,core_message_send_instant_messages');
+        $this->make_service(self::functions() . ',mod_assign_save_submission,core_message_send_instant_messages');
         $e = $this->assert_error(fn() => issuer::service(), 'servicenotreadonly');
         $this->assertStringContainsString('core_message_send_instant_messages, mod_assign_save_submission', $e->getMessage());
     }
@@ -219,7 +237,7 @@ final class issuer_test extends \advanced_testcase {
 
     public function test_restricted_service_needs_an_authorised_user(): void {
         $this->resetAfterTest();
-        $this->make_service(self::FUNCTIONS, ['restrictedusers' => 1]);
+        $this->make_service(self::functions(), ['restrictedusers' => 1]);
         $this->student();
         $this->assert_error(fn() => issuer::issue_token(issuer::service()), 'usernotallowed');
     }
@@ -238,7 +256,7 @@ final class issuer_test extends \advanced_testcase {
             [$token->externalserviceid]
         );
         sort($functions);
-        $expected = explode(',', self::FUNCTIONS);
+        $expected = explode(',', self::functions());
         sort($expected);
         $this->assertSame($expected, $functions);
     }
