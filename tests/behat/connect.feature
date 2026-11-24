@@ -34,7 +34,7 @@ Feature: Connect Moodle to KSE Shpak with a read-only key
     When I visit "/local/kseshpak/connect.php?state=42.1900000000.Signature_-x"
     Then I should see "Connect Moodle to KSE Shpak"
     And I should see "You are signed in as Olena Koval."
-    And I should see "It will not be able to submit work, send messages or change anything in Moodle."
+    And I should see "It will not be able to submit work, send messages or change your data in Moodle."
     And I press "Allow"
     And I should see "Returning to KSE Shpak"
     And the KSE Shpak return form carries the key of "student1" and the state "42.1900000000.Signature_-x"
@@ -74,7 +74,7 @@ Feature: Connect Moodle to KSE Shpak with a read-only key
   Scenario: A student turns KSE Shpak's access off in Moodle itself
     Given I log in as "student1"
     And I visit "/local/kseshpak/connect.php?state=42.1900000000.Signature_-x"
-    And I should see "/local/kseshpak/disconnect.php"
+    And I should see "turn-off page"
     And I press "Allow"
     And "student1" has 1 KSE Shpak key
     When I visit "/local/kseshpak/disconnect.php"

@@ -32,7 +32,7 @@ if ($hassiteconfig) {
         'local_kseshpak/returnurl',
         get_string('returnurl', 'local_kseshpak'),
         get_string('returnurl_desc', 'local_kseshpak'),
-        'https://kse-hub.vercel.app/api/moodle-plugin/return',
+        \local_kseshpak\issuer::DEFAULT_RETURN_URL,
         PARAM_URL,
         60
     ));

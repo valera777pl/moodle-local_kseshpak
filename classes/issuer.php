@@ -45,6 +45,9 @@ class issuer {
         'mod_quiz_get_user_quiz_attempts', 'mod_quiz_get_user_attempts', 'core_group_get_course_user_groups',
     ];
 
+    /** @var string Where the key goes until an administrator changes it (also the default of the setting in settings.php). */
+    const DEFAULT_RETURN_URL = 'https://kse-hub.vercel.app/api/moodle-plugin/return';
+
     /** @var int A key with less than this left is replaced by a new one (30 days), so a reconnect gives a full term. */
     const RENEW_BEFORE = 30 * DAYSECS;
 
@@ -65,7 +68,10 @@ class issuer {
      * @throws moodle_exception when it is empty or not https (this is also how the plugin is turned off)
      */
     public static function return_url(): string {
-        $url = trim((string) get_config('local_kseshpak', 'returnurl'));
+        $saved = get_config('local_kseshpak', 'returnurl');
+        // Never saved (the administrator skipped the "new settings" page after installing): the default applies.
+        // An empty string was saved on purpose, and means "off".
+        $url = trim((string) ($saved === false ? self::DEFAULT_RETURN_URL : $saved));
         if (!preg_match('~^https://[A-Za-z0-9.-]+(:\d+)?(/[^\s"\'<>]*)?$~', $url)) {
             throw new moodle_exception('notconfigured', 'local_kseshpak');
         }

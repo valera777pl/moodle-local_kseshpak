@@ -105,9 +105,10 @@ try {
 if (!$confirm) {
     $allow = new moodle_url('/local/kseshpak/connect.php', ['state' => $state, 'confirm' => 1, 'sesskey' => sesskey()]);
     $off = new moodle_url('/local/kseshpak/disconnect.php');
+    $offlink = html_writer::link($off, get_string('disconnectlink', 'local_kseshpak'));
     $message = html_writer::tag('p', get_string('consentwho', 'local_kseshpak', s(fullname($USER))))
         . html_writer::tag('p', get_string('consentwhat', 'local_kseshpak'))
-        . html_writer::tag('p', get_string('consentrevoke', 'local_kseshpak', html_writer::link($off, $off->out(false))));
+        . html_writer::tag('p', get_string('consentrevoke', 'local_kseshpak', $offlink));
 
     echo $OUTPUT->header();
     echo $OUTPUT->confirm($message, $allow, new moodle_url('/'), [

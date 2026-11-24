@@ -141,6 +141,18 @@ final class issuer_test extends \advanced_testcase {
         }
     }
 
+    public function test_return_url_default_applies_until_saved_and_empty_means_off(): void {
+        $this->resetAfterTest();
+        // The setting was never saved: get_config() says false, and the default address applies.
+        unset_config('returnurl', 'local_kseshpak');
+        $this->assertFalse(get_config('local_kseshpak', 'returnurl'));
+        $this->assertSame(issuer::DEFAULT_RETURN_URL, issuer::return_url());
+
+        // Saved as an empty string by the administrator: off, not the default.
+        set_config('returnurl', '', 'local_kseshpak');
+        $this->assert_error(fn() => issuer::return_url(), 'notconfigured');
+    }
+
     public function test_service_needs_web_services_and_rest(): void {
         $this->resetAfterTest();
         $this->make_service();

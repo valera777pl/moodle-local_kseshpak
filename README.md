@@ -52,7 +52,7 @@
 | Required capability | порожньо |
 | Can upload files / Can download files | **ні** (з «так» плагін ключів не видає) |
 
-**2. Функції сервісу:** *Functions* → *Add functions*. Рівно ці 10, і всі вони лише читають:
+**2. Функції сервісу:** *Functions* → *Add functions*. Ці 10 потрібні, і всі вони лише читають:
 
 ```
 core_webservice_get_site_info
@@ -69,6 +69,8 @@ core_course_get_contents
 
 На Moodle 4.x функції `mod_quiz_get_user_quiz_attempts` ще немає (вона з'явилася в Moodle 5.0). Замість неї додайте `mod_quiz_get_user_attempts`.
 
+Плагін також дозволяє, але не вимагає, `core_group_get_course_user_groups` і `mod_quiz_get_user_attempts` (на 5.x разом із новою функцією). Будь-яка інша функція в сервісі: плагін не видає ключ.
+
 Навіщо кожна:
 - профіль студента;
 - його курси;
@@ -82,26 +84,28 @@ core_course_get_contents
 
 Moodle перевіряє кожну функцію правами власника ключа. Для студента це лише його власні курси, оцінки й здачі (про зміну ролі після видачі: див. «Що плагін робить»).
 
-Групові події календаря (подія тільки для групи студента) через цей набір функцій не читаються: у застосунок потрапляють події курсу, завдання, тести й дати з сторінок курсу.
+Групові події календаря (подія тільки для групи студента): ключ може їх прочитати для груп самого студента, якщо в запиті передати ці групи. KSE Shpak їх не запитує: у застосунок потрапляють події курсу, завдання, тести й дати зі сторінок курсу.
 
 **3. Встановити плагін** одним зі способів:
 - Site administration → Plugins → *Install plugins* → завантажити `local_kseshpak.zip`;
 - або розпакувати папку `kseshpak` у `local/` (вийде `local/kseshpak`; на Moodle 5.1+ — `public/local/kseshpak`) і відкрити Site administration → *Notifications*.
 
-**4. Налаштування плагіна:** Site administration → Plugins → Local plugins → *KSE Shpak*. Адреса повернення вже стоїть: `https://kse-hub.vercel.app/api/moodle-plugin/return`. Нічого міняти не треба.
+**4. Налаштування плагіна.** Після встановлення Moodle покаже сторінку нових налаштувань: натисніть там *Save changes*. Потім перевірте в Site administration → Plugins → Local plugins → *KSE Shpak*, що адреса повернення `https://kse-hub.vercel.app/api/moodle-plugin/return` стоїть у полі, і більше нічого міняти не треба.
+
+Якщо сторінку нових налаштувань пропустили, плагін все одно бере цю типову адресу, поки в полі нічого не збережено. Але якщо відкрити налаштування й натиснути *Save changes* з порожнім полем, збережеться порожній рядок, і це означає «вимкнено».
 
 **5. Права.** Перевірте, що в ролі *Authenticated user* дозволено `webservice/rest:use`: Site administration → Users → Permissions → Define roles → Authenticated user. Без цього права ключ не працюватиме, і плагін так і напише.
 
-Moodle прибирає це право автоматично, коли вимикають «Enable mobile web services». Якщо мобільний доступ у KSE закрито саме так, права зараз немає, і його треба дати вручну. `local/kseshpak:connect` після встановлення є в *Authenticated user* за замовчуванням.
+Moodle сам дає це право ролі *Authenticated user*, коли вмикають «Enable mobile web services», але при вимкненні його не забирає. Тож якщо право хтось прибрав вручну (чи його ніколи не було), дайте його вручну. `local/kseshpak:connect` після встановлення є в *Authenticated user* за замовчуванням.
 
-**6. Cloudflare.** Сервер KSE Shpak (Vercel, без фіксованої IP-адреси) читає Moodle через `/webservice/rest/server.php`. Якщо teaching.kse.org.ua стоїть за Cloudflare, без винятку Cloudflare може відповідати серверу 403 («Just a moment...»), і жоден ключ не запрацює.
+**6. Cloudflare.** Сервер KSE Shpak (Vercel, без фіксованої IP-адреси) читає Moodle через `/webservice/rest/server.php`, а для студентів, які ще підключили Moodle старим способом (посилання на експорт календаря), ще й через `/calendar/export_execute.php`. Якщо teaching.kse.org.ua стоїть за Cloudflare, без винятку Cloudflare може відповідати серверу 403 («Just a moment...»), і жоден ключ не запрацює.
 
-Спершу з'ясуйте, що саме зупиняє запит: в Cloudflare Security → Events знайдіть запит до `/webservice/rest/server.php` (наш сервер пише у своїх логах `cf-ray`, його можна передати) і подивіться, яке правило спрацювало.
+Спершу з'ясуйте, що саме зупиняє запит: в Cloudflare Security → Events знайдіть запит до `/webservice/rest/server.php` чи `/calendar/export_execute.php` (наш сервер пише у своїх логах `cf-ray`, його можна передати) і подивіться, яке правило спрацювало.
 
 Винятки, які Cloudflare підтримує (перевірено за документацією Cloudflare на 2026-11-23):
 - **Bot Fight Mode (безкоштовний план) пропустити правилом неможливо**: «You cannot bypass or skip Bot Fight Mode using WAF custom rules». Якщо зупиняє саме він, його доведеться вимкнути для сайту або перейти на план із Super Bot Fight Mode.
 - **Super Bot Fight Mode** (плани Pro і вище), **Managed rules**, **Security level**, **Browser Integrity Check**: правило WAF Security → WAF → Custom rules, дія **Skip** (обрати відповідні пункти), для запитів, де виконуються обидві умови:
-  - шлях `/webservice/rest/server.php`;
+  - шлях `/webservice/rest/server.php` або `/calendar/export_execute.php` (другий потрібен лише тим, хто підключив календар посиланням: без нього їхні дедлайни не оновлюються, ключів плагіна це не стосується);
   - заголовок `X-KSE-Hub` дорівнює секрету, який розробник передасть окремо.
 
 Без секрету правило нічого не відкриває. Самі запити захищені ключем кожного студента. Перевірити, чи спрацювало, можна кроком «Перевірка» нижче: він називає Cloudflare, якщо 403 лишився.
