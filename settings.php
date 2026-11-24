@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Admin settings for local_kseshpak: one field, the address the key is sent to.
+ * Admin settings for local_kseshpak: the address the key is sent to, and how long a key lives.
  *
  * @package    local_kseshpak
  * @copyright  2026 KSE Shpak
@@ -35,5 +35,13 @@ if ($hassiteconfig) {
         \local_kseshpak\issuer::DEFAULT_RETURN_URL,
         PARAM_URL,
         60
+    ));
+
+    $settings->add(new admin_setting_configduration(
+        'local_kseshpak/keylifetime',
+        get_string('keylifetime', 'local_kseshpak'),
+        get_string('keylifetime_desc', 'local_kseshpak'),
+        \local_kseshpak\issuer::DEFAULT_KEY_LIFETIME,
+        DAYSECS
     ));
 }

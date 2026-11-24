@@ -29,7 +29,8 @@ final class issuer_test extends \advanced_testcase {
     /** @var string The read-only functions KSE Shpak calls, as IT adds them to the service. */
     const FUNCTIONS = 'core_webservice_get_site_info,core_enrol_get_users_courses,gradereport_overview_get_course_grades,'
         . 'gradereport_user_get_grade_items,core_calendar_get_calendar_events,mod_assign_get_assignments,'
-        . 'mod_assign_get_submission_status,mod_quiz_get_quizzes_by_courses,core_course_get_contents';
+        . 'mod_assign_get_submission_status,mod_quiz_get_quizzes_by_courses,core_course_get_contents,'
+        . 'core_group_get_course_user_groups';
 
     /** @var string Quiz attempts since Moodle 5 (KSE moved to Moodle 5 in November 2026). */
     const QUIZ_ATTEMPTS = 'mod_quiz_get_user_quiz_attempts';
@@ -194,9 +195,19 @@ final class issuer_test extends \advanced_testcase {
         $this->assertStringContainsString('core_course_get_courses, core_message_get_conversations', $e->getMessage());
     }
 
-    public function test_the_optional_groups_function_is_accepted(): void {
+    public function test_a_function_a_moodle_upgrade_removed_does_not_stop_the_keys(): void {
+        global $DB;
         $this->resetAfterTest();
-        $this->make_service(self::functions() . ',core_group_get_course_user_groups');
+        $service = $this->make_service();
+        // Core keeps a removed function listed in the services that had it (upgradelib.php), though nobody can call it.
+        $DB->insert_record('external_services_functions', ['externalserviceid' => $service->id, 'functionname' => 'mod_quiz_gone']);
+        $this->assertSame(issuer::SERVICE, issuer::service()->shortname);
+    }
+
+    public function test_a_service_without_the_groups_function_is_accepted(): void {
+        $this->resetAfterTest();
+        // Asked of IT since 2.1.3 (group events); a service set up before that, without it, still gets keys.
+        $this->make_service(str_replace(',core_group_get_course_user_groups', '', self::functions()));
         $this->assertSame(issuer::SERVICE, issuer::service()->shortname);
     }
 
@@ -207,7 +218,7 @@ final class issuer_test extends \advanced_testcase {
     }
 
     public function test_student_gets_one_key_without_createtoken(): void {
-        global $CFG, $DB;
+        global $DB;
         $this->resetAfterTest();
         $service = $this->make_service();
         $user = $this->student();
@@ -219,7 +230,7 @@ final class issuer_test extends \advanced_testcase {
         $this->assertEquals($user->id, $token->userid);
         $this->assertEquals($service->id, $token->externalserviceid);
         $this->assertEquals(EXTERNAL_TOKEN_PERMANENT, $token->tokentype);
-        $this->assertEqualsWithDelta(time() + $CFG->tokenduration, $token->validuntil, 5);
+        $this->assertEqualsWithDelta(time() + issuer::DEFAULT_KEY_LIFETIME, $token->validuntil, 5);
 
         // Connecting again gives the same key, not a second one.
         $this->assertSame($key, issuer::issue_token($service));
@@ -331,6 +342,75 @@ final class issuer_test extends \advanced_testcase {
         $this->assert_error(fn() => issuer::issue_token($service), 'nostaff');
     }
 
+    public function test_a_teacher_of_one_assignment_only_gets_no_key(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $service = $this->make_service();
+        $user = $this->student();
+        $course = $this->getDataGenerator()->create_course();
+        $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
+        $assign = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+        $teacherid = $DB->get_field('role', 'id', ['shortname' => 'teacher'], MUST_EXIST);
+        role_assign($teacherid, $user->id, \context_module::instance($assign->cmid)->id);
+        $this->assert_error(fn() => issuer::issue_token($service), 'nostaff');
+        $this->assertEquals(0, $DB->count_records('external_tokens', ['userid' => $user->id]));
+    }
+
+    public function test_a_parent_or_mentor_gets_no_key(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $service = $this->make_service();
+        $user = $this->student();
+        $child = $this->getDataGenerator()->create_user();
+        $roleid = create_role('Parent', 'kseshpakparent', 'A role in a student\'s own context');
+        set_role_contextlevels($roleid, [CONTEXT_USER]);
+        role_assign($roleid, $user->id, \context_user::instance($child->id)->id);
+        $this->assert_error(fn() => issuer::issue_token($service), 'nostaff');
+        $this->assertEquals(0, $DB->count_records('external_tokens', ['userid' => $user->id]));
+    }
+
+    public function test_a_student_with_a_role_in_an_activity_that_grades_nothing_gets_a_key(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $service = $this->make_service();
+        $user = $this->student();
+        $course = $this->getDataGenerator()->create_course();
+        $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
+        $assign = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+        $studentid = $DB->get_field('role', 'id', ['shortname' => 'student'], MUST_EXIST);
+        role_assign($studentid, $user->id, \context_module::instance($assign->cmid)->id);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', issuer::issue_token($service));
+    }
+
+    public function test_the_return_address_is_in_the_settings_right_after_install(): void {
+        $this->resetAfterTest();
+        $this->assertSame(issuer::DEFAULT_RETURN_URL, get_config('local_kseshpak', 'returnurl'));
+        $this->assertEquals(issuer::DEFAULT_KEY_LIFETIME, get_config('local_kseshpak', 'keylifetime'));
+    }
+
+    public function test_a_key_lives_a_year_unless_the_setting_says_otherwise(): void {
+        global $CFG, $DB;
+        $this->resetAfterTest();
+        $service = $this->make_service();
+        $user = $this->student();
+        $this->assertSame(365 * DAYSECS, issuer::key_lifetime());
+
+        // A month, set by the administrator.
+        set_config('keylifetime', 30 * DAYSECS, 'local_kseshpak');
+        $token = issuer::issue_token($service);
+        $validuntil = $DB->get_field('external_tokens', 'validuntil', ['token' => $token, 'userid' => $user->id]);
+        $this->assertEqualsWithDelta(time() + 30 * DAYSECS, $validuntil, 5);
+
+        // 0: the site's own lifetime.
+        set_config('keylifetime', 0, 'local_kseshpak');
+        $CFG->tokenduration = 12 * WEEKSECS;
+        $this->assertSame(12 * WEEKSECS, issuer::key_lifetime());
+
+        // Never saved: a year.
+        unset_config('keylifetime', 'local_kseshpak');
+        $this->assertSame(issuer::DEFAULT_KEY_LIFETIME, issuer::key_lifetime());
+    }
+
     public function test_logged_in_as_someone_else_gets_no_key(): void {
         $this->resetAfterTest();
         $service = $this->make_service();
@@ -350,7 +430,7 @@ final class issuer_test extends \advanced_testcase {
     }
 
     public function test_a_key_close_to_its_end_is_replaced_by_a_full_one(): void {
-        global $CFG, $DB;
+        global $DB;
         $this->resetAfterTest();
         $service = $this->make_service();
         $user = $this->student();
@@ -362,7 +442,7 @@ final class issuer_test extends \advanced_testcase {
         // The old one is gone: KSE Shpak keeps only the newest, and nobody else holds it.
         $this->assertEquals([$new], array_values($DB->get_fieldset_select('external_tokens', 'token', 'userid = ?', [$user->id])));
         $validuntil = $DB->get_field('external_tokens', 'validuntil', ['token' => $new]);
-        $this->assertEqualsWithDelta(time() + $CFG->tokenduration, $validuntil, 5);
+        $this->assertEqualsWithDelta(time() + issuer::DEFAULT_KEY_LIFETIME, $validuntil, 5);
     }
 
     public function test_delete_tokens_takes_only_this_users_keys_for_this_service(): void {

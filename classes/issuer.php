@@ -48,6 +48,9 @@ class issuer {
     /** @var string Where the key goes until an administrator changes it (also the default of the setting in settings.php). */
     const DEFAULT_RETURN_URL = 'https://kse-hub.vercel.app/api/moodle-plugin/return';
 
+    /** @var int How long a key lives until an administrator changes it: a year, so a student connects once a year. */
+    const DEFAULT_KEY_LIFETIME = 365 * DAYSECS;
+
     /** @var int A key with less than this left is replaced by a new one (30 days), so a reconnect gives a full term. */
     const RENEW_BEFORE = 30 * DAYSECS;
 
@@ -76,6 +79,23 @@ class issuer {
             throw new moodle_exception('notconfigured', 'local_kseshpak');
         }
         return $url;
+    }
+
+    /**
+     * How long a new key lives, in seconds, from the plugin settings: a year until changed there. 0 there means the
+     * site's own key lifetime (Site administration → Server → Web services → tokenduration).
+     *
+     * @return int seconds, 0 for a key that never expires (only when the site's own lifetime is 0)
+     */
+    public static function key_lifetime(): int {
+        global $CFG;
+
+        $saved = get_config('local_kseshpak', 'keylifetime');
+        $lifetime = $saved === false ? self::DEFAULT_KEY_LIFETIME : (int) $saved;
+        if ($lifetime <= 0) {
+            $lifetime = (int) ($CFG->tokenduration ?? 0);
+        }
+        return max(0, $lifetime);
     }
 
     /**
@@ -122,6 +142,13 @@ class issuer {
             'externalserviceid = ?',
             [$service->id]
         );
+        if (!$names) {
+            throw new moodle_exception('serviceempty', 'local_kseshpak', '', self::SERVICE);
+        }
+        // A function a Moodle upgrade removed stays listed in the service (core keeps it there to tell admins), but nobody can
+        // call it any more: it is no reason to refuse every key after an upgrade.
+        $existing = $DB->get_fieldset_select('external_functions', 'name', '');
+        $names = array_values(array_intersect($names, $existing));
         if (!$names) {
             throw new moodle_exception('serviceempty', 'local_kseshpak', '', self::SERVICE);
         }
@@ -193,16 +220,55 @@ class issuer {
     }
 
     /**
-     * Whether the user may see other people's grades anywhere: in the whole site, or in at least one course.
+     * @var string[] What a teacher, an assistant or a manager has and a student hasn't: any of them lets the same read
+     * functions return other people's grades, submissions or quiz attempts.
+     */
+    const STAFF_CAPABILITIES = [
+        'moodle/grade:viewall', 'mod/assign:grade', 'mod/assign:viewgrades', 'mod/quiz:viewreports', 'mod/quiz:grade',
+    ];
+
+    /**
+     * Whether the user may see other people's grades or work anywhere: in the whole site, in a course or category,
+     * in a single activity (a teacher of one assignment only), or as someone's parent or mentor (a role in a user's context).
      *
      * @param int $userid
      * @return bool
      */
     public static function sees_others_grades(int $userid): bool {
-        if (has_capability('moodle/grade:viewall', context_system::instance(), $userid, false)) {
-            return true;
+        global $DB;
+
+        foreach (self::STAFF_CAPABILITIES as $capability) {
+            if (has_capability($capability, context_system::instance(), $userid, false)) {
+                return true;
+            }
+            // Roles in the site, a category or a course.
+            if (get_user_capability_course($capability, $userid, false, '', '', 1)) {
+                return true;
+            }
         }
-        return (bool) get_user_capability_course('moodle/grade:viewall', $userid, false, '', '', 1);
+        // Roles given in one activity only, and roles in another user's context (parent, mentor).
+        $contexts = $DB->get_records_sql(
+            'SELECT DISTINCT ctx.id, ctx.contextlevel
+               FROM {role_assignments} ra
+               JOIN {context} ctx ON ctx.id = ra.contextid
+              WHERE ra.userid = ? AND ctx.contextlevel IN (?, ?)',
+            [$userid, CONTEXT_MODULE, CONTEXT_USER]
+        );
+        foreach ($contexts as $record) {
+            if ((int) $record->contextlevel === CONTEXT_USER) {
+                return true;
+            }
+            $context = \context::instance_by_id($record->id, IGNORE_MISSING);
+            if (!$context) {
+                continue;
+            }
+            foreach (self::STAFF_CAPABILITIES as $capability) {
+                if (has_capability($capability, $context, $userid, false)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -210,7 +276,7 @@ class issuer {
      *
      * Students don't need moodle/webservice:createtoken (that would let them make keys for any open service);
      * this plugin's own capability local/kseshpak:connect lets them get a key for kse_shpak_readonly only.
-     * The checks and the expiry are those of \core_external\util::generate_token_for_current_user().
+     * The checks are those of \core_external\util::generate_token_for_current_user(); the expiry is key_lifetime().
      * A key close to its expiry is not handed out again: a new one replaces every key of the user for this service,
      * since KSE Shpak keeps only the newest.
      *
@@ -219,7 +285,7 @@ class issuer {
      * @throws moodle_exception
      */
     public static function issue_token(stdClass $service): string {
-        global $CFG, $DB, $USER;
+        global $DB, $USER;
 
         self::require_can_connect($service);
         $context = context_system::instance();
@@ -227,7 +293,8 @@ class issuer {
         $token = self::existing_token($service);
         if (!$token) {
             self::delete_tokens((int) $USER->id, (int) $service->id);
-            $validuntil = empty($CFG->tokenduration) ? 0 : time() + (int) $CFG->tokenduration;
+            $lifetime = self::key_lifetime();
+            $validuntil = $lifetime ? time() + $lifetime : 0;
             $key = \core_external\util::generate_token(EXTERNAL_TOKEN_PERMANENT, $service, $USER->id, $context, $validuntil);
             $token = $DB->get_record('external_tokens', ['token' => $key], '*', MUST_EXIST);
 
@@ -268,10 +335,10 @@ class issuer {
      * @return stdClass|null record from {external_tokens}
      */
     private static function existing_token(stdClass $service): ?stdClass {
-        global $CFG, $DB, $USER;
+        global $DB, $USER;
 
-        // Renew a month before the end, or halfway through when the site's keys live less than two months.
-        $renewbefore = min(self::RENEW_BEFORE, (int) (($CFG->tokenduration ?? 0) / 2));
+        // Renew a month before the end, or halfway through when keys live less than two months.
+        $renewbefore = min(self::RENEW_BEFORE, (int) (self::key_lifetime() / 2));
 
         $tokens = $DB->get_records('external_tokens', [
             'userid' => $USER->id,

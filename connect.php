@@ -124,6 +124,9 @@ echo $OUTPUT->heading(get_string('returning', 'local_kseshpak'));
 echo html_writer::start_tag('form', ['method' => 'post', 'action' => $returnurl, 'id' => 'local_kseshpak_return']);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'token', 'value' => $token]);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'state', 'value' => $state]);
+// When the key stops working (0: never), so KSE Shpak can remind the student to connect again before that.
+$validuntil = (int) $DB->get_field('external_tokens', 'validuntil', ['token' => $token]);
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'validuntil', 'value' => $validuntil]);
 echo html_writer::tag('button', get_string('returnbutton', 'local_kseshpak'), ['type' => 'submit', 'class' => 'btn btn-primary']);
 echo html_writer::end_tag('form');
 // Sent at once; the button stays for a browser without JavaScript.
