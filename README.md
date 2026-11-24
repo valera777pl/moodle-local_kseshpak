@@ -4,7 +4,27 @@
 
 *A Moodle local plugin that lets a student connect Moodle to KSE Shpak (a Telegram bot for KSE students) with a read-only web service key, without copying links. GPL v3.*
 
-**Завантажити:** [Releases](https://github.com/valera777pl/moodle-local_kseshpak/releases) → **остання** версія → `local_kseshpak.zip`. Zip збирає GitHub Actions прямо з коду цього репозиторію, поруч лежить його SHA-256. Перед встановленням увесь код можна прочитати тут, у браузері: основне — [`connect.php`](connect.php), [`disconnect.php`](disconnect.php) і [`classes/issuer.php`](classes/issuer.php).
+## Спершу подивіться код
+
+Увесь плагін — це кілька невеликих файлів, їх можна прочитати тут, у браузері, нічого не завантажуючи. Код саме версії 2.1.3: [tag v2.1.3](https://github.com/valera777pl/moodle-local_kseshpak/tree/v2.1.3).
+
+| Файл | Що в ньому | Рядків |
+|---|---|---|
+| [`connect.php`](connect.php) | сторінка підключення: вхід → згода → «Дозволити» → ключ іде формою на адресу з налаштувань | ~135 |
+| [`disconnect.php`](disconnect.php) | сторінка, де студент сам видаляє свій ключ | ~80 |
+| [`classes/issuer.php`](classes/issuer.php) | усі перевірки (сервіс лише на читання, лише потрібні функції, без файлів, без викладачів і адмінів) і видача ключа стандартною функцією ядра | ~360 |
+| [`settings.php`](settings.php) | два налаштування: адреса повернення і термін дії ключа | ~45 |
+| [`db/access.php`](db/access.php) | одне право `local/kseshpak:connect` | ~40 |
+| [`db/install.php`](db/install.php), [`db/upgrade.php`](db/upgrade.php) | записують налаштування за замовчуванням | ~40 |
+| [`classes/privacy/provider.php`](classes/privacy/provider.php) | Privacy API: що передається назовні | ~100 |
+| [`lang/en`](lang/en/local_kseshpak.php), [`lang/uk`](lang/uk/local_kseshpak.php) | тексти сторінок англійською й українською | ~60 |
+| [`tests/`](tests) | тести PHPUnit і Behat, які проганяє CI | — |
+
+Плагін не створює таблиць, не має зовнішніх бібліотек, нічого не завантажує з інтернету й нікуди не звертається сам: ключ передає браузер студента після «Дозволити». JavaScript — один рядок у `connect.php`, який сам надсилає форму повернення (кнопка поруч робить те саме).
+
+## Завантажити
+
+[Releases](https://github.com/valera777pl/moodle-local_kseshpak/releases) → **остання** версія (Latest) → `local_kseshpak.zip`. Zip збирає GitHub Actions прямо з коду цього репозиторію за тегом версії ([workflow](.github/workflows/release.yml)), поруч лежить його SHA-256. Щоб переконатися, що в zip той самий код: розпакуйте його й порівняйте з тегом версії (`git clone`, `git checkout v2.1.3`, `diff -r`).
 
 Кожну зміну автоматично перевіряють на справжньому Moodle 4.2, 4.5, 5.0, 5.1, 5.2 і 5.3 ([CI](https://github.com/valera777pl/moodle-local_kseshpak/actions/workflows/ci.yml)): синтаксис, стиль коду Moodle, документація, валідація плагіна, тести PHPUnit і Behat.
 
