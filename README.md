@@ -24,7 +24,11 @@
 
 ## Завантажити
 
-[Releases](https://github.com/valera777pl/moodle-local_kseshpak/releases) → **остання** версія (Latest) → `local_kseshpak.zip`. Zip збирає GitHub Actions прямо з коду цього репозиторію за тегом версії ([workflow](.github/workflows/release.yml)), поруч лежить його SHA-256. Щоб переконатися, що в zip той самий код: розпакуйте його й порівняйте з тегом версії (`git clone`, `git checkout v2.1.3`, `diff -r`).
+[Releases](https://github.com/valera777pl/moodle-local_kseshpak/releases/latest) → у розділі *Assets* файл **`local_kseshpak.zip`**. Саме його завантажуєте в Moodle (Site administration → Plugins → *Install plugins*).
+
+Не беріть *Source code (zip)* / *Source code (tar.gz)*: ці архіви GitHub додає до кожної версії сам, і папка всередині називається `moodle-local_kseshpak-…`, а Moodle чекає `kseshpak`.
+
+Zip збирає GitHub Actions прямо з коду цього репозиторію за тегом версії ([workflow](.github/workflows/release.yml)), поруч лежить його SHA-256. Щоб переконатися, що в zip той самий код: розпакуйте його й порівняйте з тегом версії (`git clone`, `git checkout v2.1.3`, `diff -r`).
 
 Кожну зміну автоматично перевіряють на справжньому Moodle 4.2, 4.5, 5.0, 5.1, 5.2 і 5.3 ([CI](https://github.com/valera777pl/moodle-local_kseshpak/actions/workflows/ci.yml)): синтаксис, стиль коду Moodle, документація, валідація плагіна, тести PHPUnit і Behat.
 
